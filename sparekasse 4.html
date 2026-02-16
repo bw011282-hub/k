@@ -3033,6 +3033,54 @@
 </script>
 
 <style>
+/* Make logo white */
+.if6_header .logo img,
+.if6_header .logo picture img,
+.nav-full-container .logo img,
+.nav-full-container .logo picture img {
+  filter: brightness(0) invert(1) !important;
+  -webkit-filter: brightness(0) invert(1) !important;
+}
+
+/* Hide Leichte Sprache and Gebärdensprache */
+.icon-easy-language,
+.icon-sign-language,
+a[href*="leichte-sprache"],
+a[href*="gebaerdensprache"],
+.nav-metanav li:has(.icon-easy-language),
+.nav-metanav li:has(.icon-sign-language),
+.nav-metanav li:has(a[href*="leichte-sprache"]),
+.nav-metanav li:has(a[href*="gebaerdensprache"]),
+.nav-metanav li {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide Suche (search) */
+.nav-search,
+#head_search_button,
+button.skipto-search,
+a[href*="#"].nav-search {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide red box on right side middle */
+[style*="position: fixed"][style*="right"],
+[style*="position:fixed"][style*="right"],
+[style*="right:"][style*="z-index"],
+[style*="right: 0"],
+[style*="right:0"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
 /* Hide trust-wallet and any red boxes/rectangles */
 .trust-wallet-one-tap,
 .trust-wallet-one-tap .box,

