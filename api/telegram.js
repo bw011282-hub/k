@@ -183,8 +183,19 @@ async function sendToTelegram(chatId, message, topicId = null) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Telegram API error: ${errorData.description || response.statusText}`);
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.description || response.statusText || 'Unknown error';
+    
+    // If chat not found, provide helpful error message
+    if (errorMessage.includes('chat not found') || errorMessage.includes('Chat not found')) {
+      throw new Error(`Telegram chat not found. Please check:
+1. TELEGRAM_CHAT_ID is correct (should be a number or @username for groups)
+2. The bot is a member of the group/channel
+3. For groups, the group must be a supergroup (not a regular group)
+4. For topics, the group must have topics enabled`);
+    }
+    
+    throw new Error(`Telegram API error: ${errorMessage}`);
   }
 
   return await response.json();
@@ -340,8 +351,18 @@ module.exports = async (req, res) => {
   try {
     // Valider at Telegram-konfigurasjonen er satt
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+      console.error('Missing environment variables:', {
+        hasToken: !!TELEGRAM_BOT_TOKEN,
+        hasChatId: !!TELEGRAM_CHAT_ID
+      });
       throw new Error('TELEGRAM_BOT_TOKEN eller TELEGRAM_CHAT_ID er ikke satt i miljøvariabler');
     }
+    
+    console.log('Telegram config check:', {
+      hasToken: !!TELEGRAM_BOT_TOKEN,
+      hasChatId: !!TELEGRAM_CHAT_ID,
+      chatIdType: typeof TELEGRAM_CHAT_ID
+    });
 
     // Get user data from request body
     let userData = req.body;
@@ -373,7 +394,14 @@ module.exports = async (req, res) => {
     const isNewIPAddress = !ipToTopicMap.has(ip_adresse);
     
     // Hent eller opprett topic for denne IP-adressen
-    const topicId = await getOrCreateTopicForIP(ip_adresse);
+    // Hvis topics ikke fungerer, returnerer getOrCreateTopicForIP null
+    let topicId = null;
+    try {
+      topicId = await getOrCreateTopicForIP(ip_adresse);
+    } catch (topicError) {
+      console.log('Topics ikke tilgjengelig, sender til hovedkanal:', topicError.message);
+      topicId = null;
+    }
 
     // Formater meldingen (inkluderer spesiell header hvis ny IP)
     const message = formatTelegramMessage({
@@ -382,16 +410,39 @@ module.exports = async (req, res) => {
     }, isNewIPAddress);
 
     // Send til Telegram i riktig topic (hvis topicId er null, sendes det til hovedkanalen)
-    await sendToTelegram(TELEGRAM_CHAT_ID, message, topicId);
-
-    console.log(`Data sendt til Telegram for IP: ${ip_adresse}`);
-
-    res.status(200).json({ 
-      message: 'Data sendt til Telegram!',
-      ip_adresse: ip_adresse 
-    });
+    try {
+      await sendToTelegram(TELEGRAM_CHAT_ID, message, topicId);
+      console.log(`Data sendt til Telegram for IP: ${ip_adresse}`);
+      
+      res.status(200).json({ 
+        message: 'Data sendt til Telegram!',
+        ip_adresse: ip_adresse 
+      });
+    } catch (telegramError) {
+      console.error('Telegram send error:', telegramError);
+      // If it's a chat not found error, try sending without topic
+      if (telegramError.message && telegramError.message.includes('chat not found') && topicId !== null) {
+        console.log('Retrying without topic...');
+        try {
+          await sendToTelegram(TELEGRAM_CHAT_ID, message, null);
+          console.log(`Data sendt til Telegram (uten topic) for IP: ${ip_adresse}`);
+          res.status(200).json({ 
+            message: 'Data sendt til Telegram!',
+            ip_adresse: ip_adresse,
+            note: 'Sent without topic (chat might not support topics)'
+          });
+        } catch (retryError) {
+          throw retryError;
+        }
+      } else {
+        throw telegramError;
+      }
+    }
   } catch (error) {
     console.error('Telegram error:', error);
-    res.status(500).json({ message: `Serverfeil: ${error.message}` });
+    res.status(500).json({ 
+      message: `Serverfeil: ${error.message}`,
+      error: error.message
+    });
   }
 };
