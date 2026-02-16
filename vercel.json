@@ -4,10 +4,9 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/api/telegram",
-      "destination": "/api/telegram.js"
+      "source": "/(.*)",
+      "destination": "/$1"
     }
   ]
 }
-
 
