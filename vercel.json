@@ -4,9 +4,14 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/$1"
+      "source": "/api/telegram",
+      "destination": "/api/telegram.js"
+    },
+    {
+      "source": "/api/ip",
+      "destination": "/api/ip.js"
     }
   ]
 }
+
 
